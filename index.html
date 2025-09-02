@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TXT to EPUB 변환기</title>
+    <!-- Tailwind CSS CDN을 포함하여 빠르게 스타일링합니다. -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+            color: #374151;
+        }
+        .container {
+            max-width: 32rem;
+        }
+        .file-upload-label {
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        .file-upload-label:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+        }
+        /* 로딩 스피너 애니메이션 */
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3b82f6;
+            border-radius: 50%;
+            width: 3rem;
+            height: 3rem;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen p-4">
+
+    <div class="container bg-white p-6 md:p-8 rounded-2xl shadow-lg border border-gray-200 text-center mx-auto my-auto">
+        <h1 class="text-2xl sm:text-3xl font-bold mb-4">
+            TXT 파일을 EPUB으로 변환하기
+        </h1>
+        <p class="text-sm sm:text-base text-gray-600 mb-6">
+            변환하려는 .txt 파일을 선택하세요.
+        </p>
+
+        <!-- 파일 업로드 버튼 -->
+        <label for="txt-file-upload" class="file-upload-label inline-block bg-blue-500 text-white font-semibold py-3 px-6 rounded-xl shadow-md hover:bg-blue-600">
+            TXT 파일 선택
+        </label>
+        <input id="txt-file-upload" type="file" accept=".txt" class="hidden" />
+
+        <!-- 상태 메시지 및 로딩 스피너 -->
+        <div id="status-area" class="mt-8 flex flex-col items-center">
+            <!-- 상태 메시지 표시 -->
+            <div id="message-box" class="hidden p-4 rounded-xl text-sm w-full"></div>
+            
+            <!-- 로딩 스피너 -->
+            <div id="loading-spinner" class="spinner hidden mt-4"></div>
+
+            <!-- 다운로드 링크가 여기에 표시됩니다. -->
+            <div id="download-link-container" class="hidden mt-6"></div>
+        </div>
+
+        <!-- EPUB 스타일 및 설정 컨테이너 -->
+        <div id="epub-settings" class="hidden mt-8 text-left w-full">
+            <h2 class="text-xl sm:text-2xl font-bold mb-4 text-center">📚EPUB 설정</h2>
+            
+            <!-- 표지 이미지 선택 -->
+            <div class="mb-6">
+                <p class="text-gray-600 mb-2">EPUB 표지 이미지 선택</p>
+                <label for="cover-image-upload" class="file-upload-label inline-block bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded-xl shadow-sm hover:bg-gray-300">
+                    이미지 선택
+                </label>
+                <input id="cover-image-upload" type="file" accept="image/*" class="hidden" />
+                <div id="cover-preview-container" class="mt-4 p-4 bg-gray-100 rounded-xl hidden">
+                    <p class="font-bold mb-2">선택된 표지 이미지:</p>
+                    <img id="cover-preview" class="w-full h-auto rounded-lg shadow-md max-h-80 object-contain mx-auto" src="" alt="표지 미리보기" />
+                </div>
+            </div>
+
+            <!-- 목차 설정 -->
+            <div class="mb-6">
+                <p class="text-gray-600 mb-2">목차 설정 (선택 사항)</p>
+                <button id="generate-toc-button" class="bg-purple-500 text-white text-sm sm:text-base font-semibold py-2 px-4 rounded-xl shadow-md hover:bg-purple-600 transition-colors mb-2 w-full sm:w-auto">
+                    ✨목차 자동 생성
+                </button>
+                <div id="toc-spinner" class="spinner hidden mx-auto mb-2"></div>
+                <textarea id="toc-input" rows="5" class="w-full p-4 border rounded-xl shadow-sm text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="챕터 제목을 한 줄씩 입력하세요.&#10;예:&#10;1장. 새로운 시작&#10;2장. 모험의 서막&#10;3장. 신비한 여정"></textarea>
+            </div>
+
+            <!-- EPUB 스타일 설정 -->
+            <div class="mb-6">
+                <p class="text-gray-600 mb-2">EPUB CSS 스타일 설정</p>
+                <textarea id="css-input" rows="8" class="w-full p-4 border rounded-xl shadow-sm text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="/* CSS 코드를 여기에 입력하세요. */">
+p {
+  line-height: 2em;
+  text-align: justify;
+  text-indent: 1em;
+  font-size: 0.95em;
+  font-weight: normal;
+  padding-bottom: 0.4em;
+}
+            </textarea>
+            </div>
+            
+            <!-- 최종 변환 버튼 -->
+            <button id="convert-button" class="w-full mt-4 bg-green-500 text-white font-semibold py-3 px-6 rounded-xl shadow-md hover:bg-green-600 transition-colors">
+                EPUB 변환하기
+            </button>
+        </div>
+    </div>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script>
+        // DOM 요소 가져오기
+        const txtFileInput = document.getElementById('txt-file-upload');
+        const coverImageInput = document.getElementById('cover-image-upload');
+        const coverPreviewContainer = document.getElementById('cover-preview-container');
+        const coverPreview = document.getElementById('cover-preview');
+        const tocInput = document.getElementById('toc-input');
+        const generateTocButton = document.getElementById('generate-toc-button');
+        const tocSpinner = document.getElementById('toc-spinner');
+        const statusArea = document.getElementById('status-area');
+        const messageBox = document.getElementById('message-box');
+        const loadingSpinner = document.getElementById('loading-spinner');
+        const downloadLinkContainer = document.getElementById('download-link-container');
+        const epubSettingsContainer = document.getElementById('epub-settings');
+        const cssInput = document.getElementById('css-input');
+        const convertButton = document.getElementById('convert-button');
+
+        let uploadedFileContent = '';
+        let coverImageFile = null;
+
+        // 사용자 정의 메시지 박스 함수
+        const showMessage = (text, type = 'info') => {
+            messageBox.textContent = text;
+            messageBox.className = 'p-4 rounded-xl text-sm w-full transition-all duration-300 ease-in-out';
+            if (type === 'success') {
+                messageBox.classList.add('bg-green-100', 'text-green-800', 'block');
+            } else if (type === 'error') {
+                messageBox.classList.add('bg-red-100', 'text-red-800', 'block');
+            } else { // info
+                messageBox.classList.add('bg-gray-100', 'text-gray-800', 'block');
+            }
+        };
+
+        // UI 상태 초기화
+        const resetUI = () => {
+            messageBox.classList.add('hidden');
+            loadingSpinner.classList.add('hidden');
+            downloadLinkContainer.classList.add('hidden');
+            downloadLinkContainer.innerHTML = '';
+            epubSettingsContainer.classList.add('hidden');
+        };
+
+        // TXT 파일 선택 시 이벤트 리스너
+        txtFileInput.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (!file) {
+                return;
+            }
+
+            resetUI();
+            
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                uploadedFileContent = e.target.result;
+                epubSettingsContainer.classList.remove('hidden');
+            };
+            reader.readAsText(file);
+        });
+
+        // 표지 이미지 파일 선택 시 이벤트 리스너
+        coverImageInput.addEventListener('change', (event) => {
+            coverImageFile = event.target.files[0];
+            if (!coverImageFile) {
+                return;
+            }
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                coverPreview.src = e.target.result;
+                coverPreviewContainer.classList.remove('hidden');
+            };
+            reader.readAsDataURL(coverImageFile);
+        });
+
+        // 다운로드 링크를 DOM에 추가하는 함수
+        const createDownloadLink = (url, fileName) => {
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fileName;
+            a.textContent = `다운로드: ${fileName}`;
+            a.className = 'bg-green-500 text-white font-semibold py-2 px-4 rounded-xl shadow-md hover:bg-green-600';
+            downloadLinkContainer.appendChild(a);
+            downloadLinkContainer.classList.remove('hidden');
+        };
+
+        // ✨목차 자동 생성 버튼 클릭 이벤트
+        generateTocButton.addEventListener('click', async () => {
+            if (!uploadedFileContent) {
+                showMessage('먼저 TXT 파일을 업로드해주세요.', 'error');
+                return;
+            }
+            
+            tocInput.value = '';
+            tocSpinner.classList.remove('hidden');
+            generateTocButton.disabled = true;
+
+            try {
+                // Gemini API 호출을 위한 payload 생성
+                const systemPrompt = "다음 텍스트를 분석하여 적절한 목차와 챕터 제목을 제안해 주세요. 챕터 제목은 '1. 제목' 형식으로 작성하고, 각 챕터는 한 줄씩 구분해 주세요.";
+                const userQuery = uploadedFileContent;
+                const apiKey = ""
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+
+                const payload = {
+                    contents: [{ parts: [{ text: userQuery }] }],
+                    tools: [{ "google_search": {} }],
+                    systemInstruction: {
+                        parts: [{ text: systemPrompt }]
+                    },
+                };
+
+                // API 호출
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`API 요청 실패: ${response.status} ${response.statusText}`);
+                }
+
+                const result = await response.json();
+                const candidate = result?.candidates?.[0];
+                const generatedText = candidate?.content?.parts?.[0]?.text;
+
+                if (generatedText) {
+                    tocInput.value = generatedText;
+                } else {
+                    showMessage('목차를 생성하는 데 실패했습니다. 직접 입력해주세요.', 'error');
+                }
+
+            } catch (error) {
+                console.error("목차 생성 중 오류 발생:", error);
+                showMessage('목차 생성 중 오류가 발생했습니다. 다시 시도해 주세요.', 'error');
+            } finally {
+                tocSpinner.classList.add('hidden');
+                generateTocButton.disabled = false;
+            }
+        });
+
+        // EPUB 변환하기 버튼 클릭 이벤트
+        convertButton.addEventListener('click', async () => {
+            if (!uploadedFileContent) {
+                showMessage('먼저 TXT 파일을 업로드해주세요.', 'error');
+                return;
+            }
+            
+            loadingSpinner.classList.remove('hidden');
+            downloadLinkContainer.classList.add('hidden');
+            downloadLinkContainer.innerHTML = '';
+            showMessage('파일을 변환하는 중입니다...', 'info');
+
+            // 사용자가 입력한 데이터 수집
+            const customCSS = cssInput.value;
+            const tocText = tocInput.value;
+            const fileName = txtFileInput.files[0].name.replace('.txt', '');
+            const epubFileName = `${fileName}.epub`;
+            const zipFileName = `${fileName}.zip`;
+
+            console.log("변환할 텍스트 파일 내용:", uploadedFileContent);
+            console.log("선택된 표지 이미지 파일:", coverImageFile);
+            console.log("입력된 목차:", tocText);
+            console.log("적용할 CSS 스타일:", customCSS);
+
+            // 실제로는 여기에 모든 데이터를 서버로 전송하는 로직을 구현해야 합니다.
+            // 아래는 서버로 데이터를 전송하고 응답을 받는 과정을 시뮬레이션합니다.
+            // 서버는 텍스트 내용, CSS, 표지 이미지, 목차 정보를 받아 EPUB 파일을 생성해야 합니다.
+            
+            setTimeout(async () => {
+                // 더미 EPUB 파일 생성 (실제 서버 응답을 대체)
+                const dummyEpubContent = `이것은 모든 설정이 적용된 더미 EPUB 파일입니다. 실제 파일은 서버에서 생성됩니다.`;
+                const dummyEpubBlob = new Blob([dummyEpubContent], { type: 'application/epub+zip' });
+                
+                showMessage('ZIP 파일로 압축 중...', 'info');
+                
+                try {
+                    // JSZip 객체 생성
+                    const zip = new JSZip();
+                    
+                    // 더미 EPUB 파일을 ZIP에 추가
+                    zip.file(epubFileName, dummyEpubBlob);
+
+                    // ZIP 파일 생성 및 다운로드 링크 생성
+                    const zipBlob = await zip.generateAsync({ type: "blob" });
+                    const zipUrl = URL.createObjectURL(zipBlob);
+
+                    loadingSpinner.classList.add('hidden');
+                    createDownloadLink(zipUrl, zipFileName);
+                    showMessage('변환 및 압축이 완료되었습니다!', 'success');
+                } catch (error) {
+                    loadingSpinner.classList.add('hidden');
+                    console.error("ZIP 압축 중 오류 발생:", error);
+                    showMessage('ZIP 압축 중 오류가 발생했습니다. 다시 시도해 주세요.', 'error');
+                }
+                
+            }, 2000); // 2초 후 완료 시뮬레이션
+        });
+    </script>
+
+</body>
+</html>
